@@ -1,15 +1,18 @@
 {
   "name": "depleting-fluids",
-  "version": "0.2.0",
-  "factorio_version": "2.0",
+  "version": "0.5.0",
+  "factorio_version": "2.1",
   "title": "Depleting Fluids",
   "author": "sakuro",
   "description": "Options for making fluid resources finite.",
   "dependencies": [
-    "base >= 2.0",
-    "? space-age >= 2.0",
+    "base >= 2.1",
+    "? space-age",
     "? James-Oil-Processing >= 2.0.0",
+    "? angelsrefining >= 2.0.0",
+    "? angelspetrochem >= 2.0.0",
     "? bobores >= 2.0.0",
+    "? factorioplus >= 2.7.7",
     "! Krastorio2",
     "! finite-oil"
   ]

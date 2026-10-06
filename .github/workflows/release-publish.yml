@@ -5,6 +5,8 @@ name: Release Publish
 
 env:
   MOD_NAME: ${{ github.event.repository.name }}
+  # Lua is only needed for `mise run test` / `mise run lint`; skip installing it in release workflows
+  MISE_DISABLE_TOOLS: lua
 
 on:
   pull_request:
@@ -27,64 +29,38 @@ jobs:
         BRANCH_NAME: ${{ github.head_ref }}
       run: |
         VERSION=${BRANCH_NAME#release-v}
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
     - name: Checkout release tag
-      uses: actions/checkout@v5
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         ref: ${{ steps.version.outputs.tag }}
         fetch-depth: 0
 
     - name: Verify version consistency
-      uses: ./.github/actions/verify-version-consistency
-      with:
-        expected_version: ${{ steps.version.outputs.version }}
-
-    - name: Set git user
-      uses: git-actions/set-user@v1
-
-    - name: Build MOD archive
-      id: build_archive
       env:
-        MOD_NAME: ${{ env.MOD_NAME }}
-        VERSION: ${{ steps.version.outputs.version }}
+        EXPECTED_VERSION: ${{ steps.version.outputs.version }}
       run: |
-        ARCHIVE_NAME="${MOD_NAME}_${VERSION}.zip"
-        git archive --prefix "${MOD_NAME}_${VERSION}/" HEAD -o "$ARCHIVE_NAME"
+        FILE_VERSION="$(jq -r '.version' info.json)"
+        if [ "$FILE_VERSION" != "$EXPECTED_VERSION" ]; then
+          echo "❌ Error: Version mismatch. File: $FILE_VERSION, Expected: $EXPECTED_VERSION"
+          exit 1
+        fi
+        echo "✅ Version consistency verified: $FILE_VERSION"
 
-        echo "archive_name=$ARCHIVE_NAME" >> $GITHUB_OUTPUT
+    - name: Setup mise
+      uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5
 
-    - name: Extract changelog for this version
-      id: changelog
+    - name: Build and upload MOD to Factorio MOD portal
       env:
-        VERSION: ${{ steps.version.outputs.version }}
-      run: |
-        # Extract changelog content for this version from changelog.txt
-        CHANGELOG_CONTENT=$(sed -n "/^Version: $VERSION$/,/^---\+$/p" changelog.txt | sed '1d; $d; s/^  //')
-
-        # Output as multiline string
-        echo "content<<EOF" >> $GITHUB_OUTPUT
-        echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-
-    - name: Upload MOD to Factorio MOD portal
-      uses: ./.github/actions/upload-to-mod-portal
-      with:
-        mod_name: ${{ env.MOD_NAME }}
-        mod_version: ${{ steps.version.outputs.version }}
-        zip_name: ${{ steps.build_archive.outputs.archive_name }}
-        api_key: ${{ secrets.MOD_PORTAL_API_KEY }}
+        FACTORIO_API_KEY: ${{ secrets.FACTORIO_API_KEY }}
+      run: mise run release:portal
 
     - name: Create GitHub Release
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        # Create release with changelog and MOD archive
-        gh release create "${{ steps.version.outputs.tag }}" \
-          --title "${{ env.MOD_NAME }} ${{ steps.version.outputs.tag }}" \
-          --notes "${{ steps.changelog.outputs.content }}" \
-          "${{ steps.build_archive.outputs.archive_name }}"
+      run: mise run release:github
 
     - name: Post-release summary
       run: |

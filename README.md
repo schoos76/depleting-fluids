@@ -1,17 +1,21 @@
 # Depleting Fluids
 
-![https://mods.factorio.com/mod/depleting-fluids](https://img.shields.io/badge/dynamic/json.svg?label=Downloads&url=https%3A%2F%2Fmods.factorio.com%2Fapi%2Fmods%2Fdepleting-fluids&query=%24.downloads_count&colorB=%2343d463)
+[![Downloads](https://img.shields.io/badge/dynamic/json.svg?label=Downloads&url=https%3A%2F%2Fmods.factorio.com%2Fapi%2Fmods%2Fdepleting-fluids&query=%24.downloads_count)](https://mods.factorio.com/mod/depleting-fluids)
 
 ## Summary
 
-This MOD makes some infinite fluid resouces finite.
+This MOD makes some infinite fluid resources finite.
 
 ### Supported resources
 
 - Factorio 2.0+ (Crude oil)
 - Space Age (Sulfuric acid geyser and fluorine vent)
 - [James Oily Extravaganza](https://mods.factorio.com/mod/James-Oil-Processing) (Natural gas)
+- [Angel's Refining](https://mods.factorio.com/mod/angelsrefining) (Thermal water)
+- [Angel's Petrochemical Processing](https://mods.factorio.com/mod/angelspetrochem) (Natural gas)
 - [Bob's Ores](https://mods.factorio.com/mod/bobores) (Ground water and Lithia water)
+- [Factorio+](https://mods.factorio.com/mod/factorioplus) (Natural gas, Aquifer and Geothermal vent)
+- [Cargo Ships](https://mods.factorio.com/mod/cargo-ships) (Offshore oil, follows the Crude oil setting automatically)
 
 ## Warning
 

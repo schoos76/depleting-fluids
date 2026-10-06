@@ -1,7 +1,8 @@
-local util = require("util")
+local resources = require("lib.resources")
+local finite = require("prototypes.finite")
 
-util.forEachResourceInSupportedMods(function(_mod, resource)
-  if util.isResourceFinite(resource) then
-    util.makeResourceFinite(resource)
+resources.eachResource(mods, function(_mod, resource)
+  if finite.enabled(resource) then
+    finite.apply(resource)
   end
 end)

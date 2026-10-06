@@ -5,6 +5,8 @@ name: Release Validation
 
 env:
   MOD_NAME: ${{ github.event.repository.name }}
+  # Lua is only needed for `mise run test` / `mise run lint`; skip installing it in release workflows
+  MISE_DISABLE_TOOLS: lua
 
 on:
   pull_request:
@@ -22,8 +24,11 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v5
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
+        # The release tag is moved to HEAD below. On pull_request the default
+        # ref is the synthetic merge commit, which never lands on main.
+        ref: ${{ github.head_ref }}
         fetch-depth: 0
 
     - name: Extract version from branch name
@@ -32,77 +37,87 @@ jobs:
         BRANCH_NAME: ${{ github.head_ref }}
       run: |
         VERSION=${BRANCH_NAME#release-v}
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
     - name: Validate version format
-      uses: ./.github/actions/validate-version-format
-      with:
-        version: ${{ steps.version.outputs.version }}
+      env:
+        VERSION: ${{ steps.version.outputs.version }}
+      run: |
+        if ! echo "$VERSION" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+          echo "❌ Error: Version must be in format x.y.z (e.g., 1.0.0)"
+          echo ""
+          echo "Provided version: $VERSION"
+          exit 1
+        fi
+        echo "✅ Version format is valid: $VERSION"
 
     - name: Verify version consistency
-      uses: ./.github/actions/verify-version-consistency
-      with:
-        expected_version: ${{ steps.version.outputs.version }}
+      env:
+        EXPECTED_VERSION: ${{ steps.version.outputs.version }}
+      run: |
+        FILE_VERSION="$(jq -r '.version' info.json)"
+        if [ "$FILE_VERSION" != "$EXPECTED_VERSION" ]; then
+          echo "❌ Error: Version mismatch. File: $FILE_VERSION, Expected: $EXPECTED_VERSION"
+          exit 1
+        fi
+        echo "✅ Version consistency verified: $FILE_VERSION"
 
     - name: Check if git tag already exists
       run: |
         if git tag | grep -q "^${{ steps.version.outputs.tag }}$"; then
-          if [ "${{ github.event.action }}" != "synchronize" ]; then
-            echo "❌ Error: Git tag ${{ steps.version.outputs.tag }} already exists"
-            echo "This should only happen if the tag was created outside the release process"
-            exit 1
-          else
+          if [ "${{ github.event.action }}" == "synchronize" ]; then
             echo "Tag ${{ steps.version.outputs.tag }} exists and will be updated to latest commit"
+          else
+            echo "Tag ${{ steps.version.outputs.tag }} already exists (created by release-preparation)"
           fi
         fi
 
-    - name: Check for misconfigured MOD_PORTAL_API_KEY
+    - name: Check for misconfigured FACTORIO_API_KEY
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # Check if MOD_PORTAL_API_KEY exists at repository level (incorrect location)
-        if gh api repos/${{ github.repository }}/actions/secrets --jq '.secrets[].name' | grep -q "^MOD_PORTAL_API_KEY$"; then
-          echo "❌ Error: MOD_PORTAL_API_KEY is misconfigured"
+        # Check if FACTORIO_API_KEY exists at repository level (incorrect location)
+        if gh api repos/${{ github.repository }}/actions/secrets --jq '.secrets[].name' | grep -q "^FACTORIO_API_KEY$"; then
+          echo "❌ Error: FACTORIO_API_KEY is misconfigured"
           echo ""
           echo "The secret is defined at repository level, but it should be in the 'release' environment."
           echo ""
           echo "To fix this:"
           echo "1. Go to https://github.com/${{ github.repository }}/settings/secrets/actions"
-          echo "2. Delete the repository-level MOD_PORTAL_API_KEY secret"
+          echo "2. Delete the repository-level FACTORIO_API_KEY secret"
           echo "3. Go to https://github.com/${{ github.repository }}/settings/environments"
-          echo "4. Click on 'release' environment and add MOD_PORTAL_API_KEY there"
+          echo "4. Click on 'release' environment and add FACTORIO_API_KEY there"
           echo ""
           echo "This ensures the secret is only accessible to release workflows with proper protection."
           exit 1
         fi
 
-    - name: Validate MOD_PORTAL_API_KEY exists
+    - name: Validate FACTORIO_API_KEY exists
       run: |
-        if [ -z "${{ secrets.MOD_PORTAL_API_KEY }}" ]; then
-          echo "❌ Error: MOD_PORTAL_API_KEY secret is not configured in release environment"
+        if [ -z "${{ secrets.FACTORIO_API_KEY }}" ]; then
+          echo "❌ Error: FACTORIO_API_KEY secret is not configured in release environment"
           echo ""
           echo "To fix this:"
-          echo "1. Generate an API key at https://mods.factorio.com/profile"
+          echo "1. Generate an API key at https://factorio.com/profile"
           echo "2. Go to https://github.com/${{ github.repository }}/settings/environments"
           echo "3. Click on 'release' environment (create if it doesn't exist)"
-          echo "4. Add environment secret: MOD_PORTAL_API_KEY with your API key"
+          echo "4. Add environment secret: FACTORIO_API_KEY with your API key"
           echo ""
           echo "Note: The secret must be in the 'release' environment for proper security."
           echo "This PR cannot be merged until the secret is configured."
           exit 1
         fi
 
+    - name: Setup mise
+      uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5
+
     - name: Validate changelog.txt format
-      run: |
-        if ! grep -q "^Version: ${{ steps.version.outputs.version }}" changelog.txt; then
-          echo "❌ Error: changelog.txt missing section for version ${{ steps.version.outputs.version }}"
-          exit 1
-        fi
+      run: factorix mod changelog check --release
 
     - name: Set git user for tag update
       if: github.event.action == 'synchronize'  # When new commits are pushed to PR
-      uses: git-actions/set-user@v1
+      uses: git-actions/set-user@49fa9362373dabe0bfcbdb5e8d4da08045ebf6f8 # v1
 
     - name: Update release tag to latest commit
       if: github.event.action == 'synchronize'  # When new commits are pushed to PR
@@ -127,6 +142,6 @@ jobs:
         else
           echo "- Git tag validated"
         fi
-        echo "- MOD_PORTAL_API_KEY is configured"
+        echo "- FACTORIO_API_KEY is configured"
         echo "- changelog.txt is properly formatted"
-        echo "- Quality checks handled by CI workflow"
+        echo "- Quality checks handled by the Lint and Spec workflows"
